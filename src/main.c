@@ -14,7 +14,7 @@
 #include <sys/mman.h>
 #include <sys/uio.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define DEBUG_LOG(msg) do {\
     if (DEBUG) {\
@@ -301,6 +301,15 @@ void close_vidbuffs() {
     }\
 } while (0)
 
+void print_buffer(void *ptr, size_t len) {
+    printf("##:");
+    char *ptr_c = ptr;
+    for (size_t i = 0; i < len; i++) {
+        printf(" %02x", ptr_c[i]);
+    }
+    printf("\n");
+}
+
 int video_ioctl(reg_t cmd, void *addr, struct vid_fd_entry *ent) {
     switch (cmd) {
         case VIDIOC_QUERYCAP:
@@ -375,36 +384,39 @@ int video_ioctl(reg_t cmd, void *addr, struct vid_fd_entry *ent) {
             }
         case VIDIOC_REQBUFS:;
             DEBUG_LOG("reqbufs");
-            printf("ON %d\n", ent->fd);
             struct v4l2_requestbuffers rbuffs;
             LD_STRUCT(&rbuffs);
+            struct v4l2_requestbuffers rbuffsout = {
+                .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                .memory = V4L2_MEMORY_MMAP,
+                .capabilities = V4L2_BUF_CAP_SUPPORTS_MMAP,
+                .reserved[0] = 0
+            };
             if (rbuffs.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-                printf("CUR_VID_STREAM: %d\n", vid_stream_fd);
-                printf("MEM TYPE: %d\n", rbuffs.memory);
                 if (rbuffs.memory != V4L2_MEMORY_MMAP) {
-                    printf("UNREC MEM\n");
-                    rbuffs.capabilities = V4L2_BUF_CAP_SUPPORTS_MMAP;
-                    ST_STRUCT(&rbuffs);
+                    rbuffsout.count = 0;
+                    ST_STRUCT(&rbuffsout);
                     return -EINVAL;
-                }  else if ((vid_stream_fd != -1) && (vid_stream_fd != ent->fd)) {
-                    printf("BUSY\n");
+                } else if ((vid_stream_fd != -1) && (vid_stream_fd != ent->fd)) {
+                    rbuffsout.count = VIDEO_BUFF_CNT;
+                    ST_STRUCT(&rbuffsout);
                     return -EBUSY;
                 } else if (rbuffs.count == 0) {
-                    printf("CLEAR\n");
                     vid_stream_fd = -1;
                     global_priority = 2;
+                    rbuffsout.count = 0;
+                    ST_STRUCT(&rbuffsout);
+                    return 0;
+                } else {
+                    vid_stream_fd = ent->fd;
+                    global_priority = 3;
+                    rbuffsout.count = VIDEO_BUFF_CNT;
+                    ST_STRUCT(&rbuffsout);
                     return 0;
                 }
-                printf("%d --> %d\n", vid_stream_fd, ent->fd);
-                vid_stream_fd = ent->fd;
-                global_priority = 3;
-                rbuffs.count = VIDEO_BUFF_CNT;
-                rbuffs.capabilities = V4L2_BUF_CAP_SUPPORTS_MMAP;
-                printf("CAPS: %d\n", rbuffs.capabilities);
-                rbuffs.reserved[0] = 0;
-                ST_STRUCT(&rbuffs);
-                return 0;
             }
+            rbuffsout.count = 0;
+            ST_STRUCT(&rbuffsout);
             return -EINVAL;
         case VIDIOC_QUERYBUF:;
             DEBUG_LOG("querybuf");
@@ -415,7 +427,6 @@ int video_ioctl(reg_t cmd, void *addr, struct vid_fd_entry *ent) {
                 ST_STRUCT(video_buffers + qbuffs.index);
                 return 0;
             } else {
-                fprintf(stderr, "[DUMMY WARN] querybuf fail\n");
                 return -EINVAL;
             }
         case VIDIOC_G_INPUT:;

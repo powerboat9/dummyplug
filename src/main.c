@@ -310,6 +310,8 @@ void print_buffer(void *ptr, size_t len) {
     printf("\n");
 }
 
+int is_mapped = 0;
+
 int video_ioctl(reg_t cmd, void *addr, struct vid_fd_entry *ent) {
     switch (cmd) {
         case VIDIOC_QUERYCAP:
@@ -497,8 +499,24 @@ int video_ioctl(reg_t cmd, void *addr, struct vid_fd_entry *ent) {
                 default:
                     return -EINVAL;
             }
+        case VIDIOC_STREAMON:;
+            int st_mode_on;
+            LD_STRUCT(&st_mode_on);
+            if ((st_mode_on == V4L2_BUF_TYPE_VIDEO_CAPTURE) && !is_mapped) {
+                return 0;
+            } else {
+                return -EINVAL;
+            }
+        case VIDIOC_STREAMOFF:;
+            int st_mode_off;
+            LD_STRUCT(&st_mode_off);
+            if ((st_mode_off == V4L2_BUF_TYPE_VIDEO_CAPTURE) && is_mapped) {
+                return 0;
+            } else {
+                return -EINVAL;
+            }
         default:
-            if (DEBUG) {
+            if (DEBUG || 0) {
                 fprintf(stderr, "[DUMMY WARN] ioctl unimplemented:\n");
                 fprintf(stderr, "             DIR: %u\n", (unsigned int) _IOC_DIR(cmd));
                 fprintf(stderr, "             TYPE: %c\n", (char) _IOC_TYPE(cmd));
@@ -516,7 +534,10 @@ void tick_syscall() {
         case SYS_read:
             if (SYSCALL_P1 != -1) {
                 for (int i = 0; i < MAX_VID_OPEN; i++) {
-                    ASSERT_ERROR(vid_fd_list[i].fd != SYSCALL_P1, "vid read not implemented");
+                    if (vid_fd_list[i].fd == SYSCALL_P1) {
+                        printf("DUMMY READ BLOCK\n")
+                        CANCEL_SYS(-EINVAL);
+                    }
                 }
             }
             bring_to_syscall();
@@ -524,7 +545,10 @@ void tick_syscall() {
         case SYS_write:
             if (SYSCALL_P1 != -1) {
                 for (int i = 0; i < MAX_VID_OPEN; i++) {
-                    ASSERT_ERROR(vid_fd_list[i].fd != SYSCALL_P1, "vid write not implemented");
+                    if (vid_fd_list[i].fd == SYSCALL_P1) {
+                        printf("DUMMY WRITE BLOCK\n")
+                        CANCEL_SYS(-EINVAL);
+                    }
                 }
             }
             bring_to_syscall();
@@ -592,6 +616,7 @@ void tick_syscall() {
                 load_regs();
                 SYSCALL_P5 = mmap_old_fd;
                 store_regs();
+                is_mapped = 1;
                 return;
             } else {
                 bring_to_syscall();
@@ -623,7 +648,7 @@ void child_process() {
     TRY_ERROR(ptrace(PTRACE_TRACEME, 0, 0, 0), "failed to accept ptrace");
     kill(getpid(), SIGSTOP); // cannot fail
     //TRY_ERROR(execlp("zoom", "zoom", NULL), "failed to start program");
-    TRY_ERROR(execlp("v4l2-compliance", "v4l2-compliance", NULL), "failed to start program");
+    TRY_ERROR(execlp("v4l2-compliance", "v4l2-compliance", "-s", NULL), "failed to start program");
     //TRY_ERROR(execlp("v4l2-ctl", "v4l2-ctl", "--all", NULL), "failed to start program");
 }
 

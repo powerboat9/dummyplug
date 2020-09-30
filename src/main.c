@@ -535,7 +535,7 @@ void tick_syscall() {
             if (SYSCALL_P1 != -1) {
                 for (int i = 0; i < MAX_VID_OPEN; i++) {
                     if (vid_fd_list[i].fd == SYSCALL_P1) {
-                        printf("DUMMY READ BLOCK\n")
+                        printf("DUMMY READ BLOCK\n");
                         CANCEL_SYS(-EINVAL);
                     }
                 }
@@ -546,7 +546,7 @@ void tick_syscall() {
             if (SYSCALL_P1 != -1) {
                 for (int i = 0; i < MAX_VID_OPEN; i++) {
                     if (vid_fd_list[i].fd == SYSCALL_P1) {
-                        printf("DUMMY WRITE BLOCK\n")
+                        printf("DUMMY WRITE BLOCK\n");
                         CANCEL_SYS(-EINVAL);
                     }
                 }
